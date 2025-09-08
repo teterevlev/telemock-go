@@ -3,6 +3,8 @@ Telemock - Testing telego Bots
 This provides a convenient local environment for testing bot logic with multiple accounts.
 The bot handles commands and any messages similarly to [telego](https://github.com/mymmrac/telego).
 
+![client](https://github.com/user-attachments/assets/3f645594-63ec-4ea9-9a8b-ef9de17d65db)
+
 ## How to use
 
 1. Import `telemock` instead of `telego`:
