@@ -22,6 +22,8 @@
     #send { padding: 10px; border: none; background: #4caf50; color: white; cursor: pointer; }
     #add-chat { padding: 10px; text-align: center; cursor: pointer; background: #fff; border-top: 1px solid #ccc; }
     #status { width: 12px; height: 12px; border-radius: 50%; background: red; margin-left: 10px; }
+    #right-controls { display: flex; align-items: center; gap: 8px; }
+    #server-url { width: 220px; padding: 6px 8px; border: 1px solid #ccc; border-radius: 6px; font-size: 0.9em; }
     .msg-container { display: flex; flex-direction: column; margin-bottom: 12px; }
     .keyboard { display: flex; flex-direction: column; margin-top: 0; }
     .keyboard-row { display: flex; gap: 4px; }
@@ -34,7 +36,7 @@
     <div id="chats"></div>
   </div>
   <div id="main">
-    <div id="header">Chat <div id="status"></div></div>
+    <div id="header">Chat <div id="right-controls"><input id="server-url" type="text" placeholder="ws://ip:port" /><div id="status"></div></div></div>
     <div id="messages"></div>
     <div id="input-area">
       <input id="text" type="text" placeholder="Type a message...">
@@ -49,6 +51,7 @@
     const sendBtn = document.getElementById("send");
     const header = document.getElementById("header");
     const status = document.getElementById("status");
+    const serverUrlInput = document.getElementById("server-url");
 
     let ws;
     let chats = {};
@@ -59,8 +62,19 @@
       return messageIdCounter++;
     }
 
+    function getSavedServerUrl() {
+      return localStorage.getItem("serverUrl") || "ws://localhost:8765";
+    }
+
     function connect() {
-      ws = new WebSocket("ws://localhost:8765");
+      const url = (serverUrlInput && serverUrlInput.value ? serverUrlInput.value : getSavedServerUrl()).trim();
+      try {
+        ws = new WebSocket(url);
+      } catch (e) {
+        status.style.background = "red";
+        setTimeout(connect, 1500);
+        return;
+      }
       ws.onopen = () => { status.style.background = "green"; };
       ws.onclose = () => { status.style.background = "red"; setTimeout(connect, 1000); };
       ws.onmessage = (event) => {
@@ -75,6 +89,28 @@
           data.reply_markup
         );
       };
+    }
+
+    // init server url input with saved/default value
+    if (serverUrlInput) {
+      serverUrlInput.value = getSavedServerUrl();
+      const saveAndReconnect = () => {
+        const val = serverUrlInput.value.trim();
+        localStorage.setItem("serverUrl", val);
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          ws.close(1000);
+        } else if (!ws || ws.readyState === WebSocket.CLOSED) {
+          connect();
+        }
+      };
+      serverUrlInput.addEventListener("change", saveAndReconnect);
+      serverUrlInput.addEventListener("blur", saveAndReconnect);
+      serverUrlInput.addEventListener("keypress", (e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          saveAndReconnect();
+        }
+      });
     }
 
     connect();
