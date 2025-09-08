@@ -7,8 +7,10 @@ import (
 	telego "github.com/teterevlev/telemock-go"
 )
 
+const API_KEY = "API Key is not being used. This const is just for reverse compatibility"
+
 func main() {
-	bot, err := telego.NewBot("7212080160:AAEwcxQp-zPEypFpxvROeeovbjVn7QgcM40")
+	bot, err := telego.NewBot(API_KEY)
 	if err != nil {
 		log.Fatal(err)
 	}

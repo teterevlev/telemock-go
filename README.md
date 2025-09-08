@@ -16,8 +16,10 @@ import (
 4. Define message handlers as you usually do with telego.
 5. This item is necessary because I have OCD and 5 is a nice number.
 
-Check demo: [examples/simple/main.go](examples/simple/main.go)
-
+Run [demo:](examples/simple/main.go)
+```
+go run ./examples/simple
+```
 ## Dependencies
 
 Setup dependenicies automatically
