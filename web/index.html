@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Telemock Chat</title>
+  <style>
+    body { font-family: sans-serif; margin: 0; display: flex; height: 100vh; background: #e6f2ff; }
+    #sidebar { width: 200px; border-right: 1px solid #ccc; display: flex; flex-direction: column; background: #fff; }
+    #chats { flex: 1; overflow-y: auto; display: flex; flex-direction: column; }
+    .chat-item { padding: 10px; cursor: pointer; border-bottom: 1px solid #eee; background: #fff; }
+    .chat-item.active { background: #f0f8ff; font-weight: bold; }
+    #main { flex: 1; display: flex; flex-direction: column; position: relative; }
+    #header { padding: 10px; border-bottom: 1px solid #ccc; font-weight: bold; background: #fff; display: flex; justify-content: space-between; align-items: center; }
+    #messages { flex: 1; padding: 10px; overflow-y: scroll; display: flex; flex-direction: column; }
+    .msg { margin: 0; padding: 12px 12px 16px 12px; border-radius: 10px; position: relative; word-wrap: break-word; display: inline-block; min-width: 40px; }
+    .me { align-self: flex-end; background: #cce7ff; border: 1px solid #b3daff; }
+    .bot { align-self: flex-start; background: #fff; border: 1px solid #ddd; }
+    .quote-block { border-left: 3px solid #ccc; padding-left: 8px; margin-bottom: 6px; font-size: 0.9em; color: #666; background: #f5f5f5; padding: 6px 8px; border-radius: 4px; }
+    .time { font-size: 0.7em; color: #666; position: absolute; bottom: 4px; right: 8px; }
+    #input-area { display: flex; border-top: 1px solid #ccc; background: #fff; }
+    #text { flex: 1; padding: 10px; border: none; outline: none; }
+    #send { padding: 10px; border: none; background: #4caf50; color: white; cursor: pointer; }
+    #add-chat { padding: 10px; text-align: center; cursor: pointer; background: #fff; border-top: 1px solid #ccc; }
+    #status { width: 12px; height: 12px; border-radius: 50%; background: red; margin-left: 10px; }
+    .msg-container { display: flex; flex-direction: column; margin-bottom: 12px; }
+    .keyboard { display: flex; flex-direction: column; margin-top: 0; }
+    .keyboard-row { display: flex; gap: 4px; }
+    .keyboard-btn { padding: 6px 10px; background: #f0f0f0; border: 1px solid #ccc; border-radius: 6px; cursor: pointer; font-size: 0.9em; white-space: nowrap; }
+    .keyboard-btn:hover { background: #e0e0e0; }
+  </style>
+</head>
+<body>
+  <div id="sidebar">
+    <div id="chats"></div>
+  </div>
+  <div id="main">
+    <div id="header">Chat <div id="status"></div></div>
+    <div id="messages"></div>
+    <div id="input-area">
+      <input id="text" type="text" placeholder="Type a message...">
+      <button id="send">Send</button>
+    </div>
+  </div>
+
+  <script>
+    const chatsDiv = document.getElementById("chats");
+    const messagesDiv = document.getElementById("messages");
+    const input = document.getElementById("text");
+    const sendBtn = document.getElementById("send");
+    const header = document.getElementById("header");
+    const status = document.getElementById("status");
+
+    let ws;
+    let chats = {};
+    let activeChatId = null;
+    let messageIdCounter = Date.now();
+
+    function generateMessageId() {
+      return messageIdCounter++;
+    }
+
+    function connect() {
+      ws = new WebSocket("ws://localhost:8765");
+      ws.onopen = () => { status.style.background = "green"; };
+      ws.onclose = () => { status.style.background = "red"; setTimeout(connect, 1000); };
+      ws.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+        addMessage(
+          data.chat_id,
+          data.text,
+          "bot",
+          data.reply_to_message_id,
+          data.is_reply,
+          data.message_id,
+          data.reply_markup
+        );
+      };
+    }
+
+    connect();
+
+    function renderChats() {
+      chatsDiv.innerHTML = "";
+      for (let id in chats) {
+        const div = document.createElement("div");
+        div.className = "chat-item" + (id == activeChatId ? " active" : "");
+        div.textContent = "Chat " + id;
+        div.onclick = () => switchChat(id);
+        chatsDiv.appendChild(div);
+      }
+      const addChatBtn = document.createElement("div");
+      addChatBtn.id = "add-chat";
+      addChatBtn.textContent = "+";
+      addChatBtn.onclick = createChat;
+      chatsDiv.appendChild(addChatBtn);
+    }
+
+    function switchChat(id) {
+      activeChatId = id;
+      header.firstChild.textContent = "Chat ID: " + id + " ";
+      renderChats();
+      renderMessages();
+      input.focus();
+    }
+
+    function findMessageById(chatId, messageId) {
+      if (!chats[chatId]) return null;
+      return chats[chatId].find(msg => msg.id == messageId);
+    }
+
+    function renderMessages() {
+      messagesDiv.innerHTML = "";
+      if (!activeChatId) return;
+      for (let msg of chats[activeChatId]) {
+        const container = document.createElement("div");
+        container.className = "msg-container";
+        const div = document.createElement("div");
+        div.className = "msg " + msg.cls;
+        div.dataset.messageId = msg.id;
+        div.dataset.messageText = msg.text;
+
+        if (msg.is_reply && msg.reply_to) {
+          const quotedMsg = findMessageById(activeChatId, msg.reply_to);
+          const quoteDiv = document.createElement("div");
+          quoteDiv.className = "quote-block";
+          quoteDiv.textContent = quotedMsg ? quotedMsg.text : "deleted";
+          div.appendChild(quoteDiv);
+        }
+
+        div.appendChild(document.createTextNode(msg.text));
+
+        const timeSpan = document.createElement("span");
+        timeSpan.className = "time";
+        timeSpan.textContent = msg.time;
+        div.appendChild(timeSpan);
+
+        container.appendChild(div);
+
+        if (msg.reply_markup && msg.reply_markup.inline_keyboard) {
+          const kbDiv = document.createElement("div");
+          kbDiv.className = "keyboard";
+          for (let row of msg.reply_markup.inline_keyboard) {
+            const rowDiv = document.createElement("div");
+            rowDiv.className = "keyboard-row";
+            for (let btn of row) {
+              const b = document.createElement("button");
+              b.className = "keyboard-btn";
+              b.textContent = btn.text;
+              b.onclick = () => {
+                ws.send(JSON.stringify({
+                  chat_id: activeChatId,
+                  callback_data: btn.callback_data,
+                  message_id: msg.id,
+                  text: msg.text
+                }));
+              };
+              rowDiv.appendChild(b);
+            }
+            kbDiv.appendChild(rowDiv);
+          }
+          container.appendChild(kbDiv);
+        }
+
+        messagesDiv.appendChild(container);
+      }
+      messagesDiv.scrollTop = messagesDiv.scrollHeight;
+    }
+
+    function addMessage(chat_id, text, cls, reply_to_message_id = null, is_reply = false, message_id = null, reply_markup = null) {
+      const now = new Date();
+      const time = now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+      const id = message_id || generateMessageId();
+      if (!chats[chat_id]) chats[chat_id] = [];
+      chats[chat_id].push({
+        text,
+        cls,
+        time,
+        id,
+        reply_to: reply_to_message_id,
+        is_reply: is_reply || false,
+        reply_markup: reply_markup
+      });
+      if (chat_id == activeChatId) renderMessages();
+    }
+
+    function createChat() {
+      const id = Math.floor(Math.random() * 1000000);
+      chats[id] = [];
+      switchChat(id);
+      renderChats();
+      input.value = "/start";
+      input.focus();
+    }
+
+    if (Object.keys(chats).length === 0) {
+      createChat();
+    }
+
+    sendBtn.onclick = () => {
+      if (!activeChatId || !ws || ws.readyState !== WebSocket.OPEN) return;
+      const text = input.value;
+      if (!text) return;
+      const messageId = generateMessageId();
+      ws.send(JSON.stringify({
+        chat_id: activeChatId,
+        text: text,
+        message_id: messageId
+      }));
+      addMessage(String(activeChatId), text, "me", null, false, messageId);
+      input.value = "";
+    };
+
+    input.addEventListener("keypress", (e) => {
+      if (e.key === "Enter") sendBtn.click();
+    });
+
+    renderChats();
+  </script>
+</body>
+</html>
