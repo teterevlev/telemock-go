@@ -8,13 +8,14 @@ import (
 )
 
 func main() {
-	bot, err := telego.NewBot("mock-token")
+	bot, err := telego.NewBot("7212080160:AAEwcxQp-zPEypFpxvROeeovbjVn7QgcM40")
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	ctx := context.Background()
 
+	// Получаем канал обновлений через long polling
 	updates, err := bot.UpdatesViaLongPolling(ctx, &telego.GetUpdatesParams{})
 	if err != nil {
 		log.Fatal(err)
@@ -28,9 +29,9 @@ func main() {
 			case "/start":
 				bot.SendMessage(ctx, &telego.SendMessageParams{
 					ChatID: telego.ChatID{ID: msg.Chat.ID},
-					Text:   "Hello from telemock!",
+					Text:   "Hello",
 				})
-			case "/buttons":
+			case "/b":
 				keyboard := telego.InlineKeyboardMarkup{
 					InlineKeyboard: [][]telego.InlineKeyboardButton{
 						{
@@ -41,13 +42,14 @@ func main() {
 				}
 				bot.SendMessage(ctx, &telego.SendMessageParams{
 					ChatID:      telego.ChatID{ID: msg.Chat.ID},
-					Text:        "Choose a button:",
+					Text:        "text",
 					ReplyMarkup: &keyboard,
 				})
 			default:
 				bot.SendMessage(ctx, &telego.SendMessageParams{
-					ChatID: telego.ChatID{ID: msg.Chat.ID},
-					Text:   "You said: " + msg.Text,
+					ChatID:           telego.ChatID{ID: msg.Chat.ID},
+					Text:             "ack",
+					ReplyToMessageID: msg.MessageID,
 				})
 			}
 		}

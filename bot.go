@@ -104,14 +104,19 @@ func (b *Bot) SendMessage(ctx context.Context, params *SendMessageParams) (*Mess
 	}
 
 	out := outboundPayload{
-		ChatID:    params.ChatID.ID,
-		Text:      params.Text,
-		From:      "bot",
-		MessageID: msgID,
+		ChatID:           params.ChatID.ID,
+		Text:             params.Text,
+		From:             "bot",
+		MessageID:        msgID,
+		ReplyToMessageID: params.ReplyToMessageID,
 	}
 
 	if params.ReplyMarkup != nil {
 		out.ReplyMarkup = params.ReplyMarkup
+	}
+
+	if params.ReplyToMessageID != 0 {
+		out.IsReply = true
 	}
 
 	b.mu.RLock()

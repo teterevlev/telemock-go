@@ -16,9 +16,10 @@ type ChatID struct {
 }
 
 type SendMessageParams struct {
-	ChatID      ChatID                `json:"chat_id"`
-	Text        string                `json:"text"`
-	ReplyMarkup *InlineKeyboardMarkup `json:"reply_markup,omitempty"`
+	ChatID           ChatID                `json:"chat_id"`
+	Text             string                `json:"text"`
+	ReplyMarkup      *InlineKeyboardMarkup `json:"reply_markup,omitempty"`
+	ReplyToMessageID int64                 `json:"reply_to_message_id,omitempty"`
 }
 
 type Update struct {
