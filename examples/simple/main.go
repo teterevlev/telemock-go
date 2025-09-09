@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"log"
+	"strconv"
 	"strings"
 
 	telego "github.com/teterevlev/telemock-go"
@@ -60,6 +61,11 @@ func main() {
 						ChatID:      telego.ChatID{ID: msg.Chat.ID},
 						Text:        "text",
 						ReplyMarkup: &keyboard,
+					})
+				case "/ref":
+					bot.SendMessage(ctx, &telego.SendMessageParams{
+						ChatID: telego.ChatID{ID: msg.Chat.ID},
+						Text:   "t.me/telemock_bot?start=" + strconv.FormatInt(msg.Chat.ID, 10),
 					})
 				default:
 					bot.SendMessage(ctx, &telego.SendMessageParams{
