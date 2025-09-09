@@ -64,6 +64,8 @@ func (b *Bot) readLoop(conn *websocket.Conn) {
 		if err != nil {
 			return
 		}
+		// log incoming payload
+		b.logRequest(conn.RemoteAddr().String(), raw)
 		var cp clientPayload
 		if err := json.Unmarshal(raw, &cp); err != nil {
 			b.logger.Printf("telemock: invalid payload: %v\n", err)

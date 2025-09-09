@@ -8,6 +8,8 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"os"
+	"path/filepath"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -27,6 +29,8 @@ type Bot struct {
 	listener   net.Listener
 	closed     chan struct{}
 	logger     *log.Logger
+	logFile    *os.File
+	logMu      sync.Mutex
 }
 
 // NewBot starts telemock WS server listening on default address ":8765".
@@ -41,6 +45,20 @@ func NewBot(token string) (*Bot, error) {
 		updates:  make(chan Update, 256),
 		closed:   make(chan struct{}),
 		logger:   log.Default(),
+	}
+
+	// initialize JSONL logging into log/<datetime>.jsonl
+	if err := os.MkdirAll("log", 0o755); err != nil {
+		b.logger.Printf("telemock: failed to create log dir: %v\n", err)
+	} else {
+		fname := time.Now().Format("2006-01-02T15-04-05Z07:00") + ".jsonl"
+		path := filepath.Join("log", fname)
+		f, err := os.Create(path)
+		if err != nil {
+			b.logger.Printf("telemock: failed to create log file: %v\n", err)
+		} else {
+			b.logFile = f
+		}
 	}
 
 	ln, err := net.Listen("tcp", addr)
@@ -167,6 +185,11 @@ func (b *Bot) Close(ctx context.Context) error {
 	// close updates channel
 	close(b.updates)
 
+	// close log file
+	if b.logFile != nil {
+		_ = b.logFile.Close()
+	}
+
 	// wait for serve goroutine to finish
 	select {
 	case <-b.closed:
@@ -174,4 +197,15 @@ func (b *Bot) Close(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+// logRequest writes one JSON line with incoming raw payload
+func (b *Bot) logRequest(remote string, raw []byte) {
+	if b.logFile == nil {
+		return
+	}
+	b.logMu.Lock()
+	defer b.logMu.Unlock()
+	_, _ = b.logFile.Write(raw)
+	_, _ = b.logFile.Write([]byte("\n"))
 }
