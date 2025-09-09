@@ -25,38 +25,52 @@ func TestScenario_Simple(t *testing.T) {
 	// 1) Запускаем реальный бот-процесс из каталога примера
 	cmd := exec.Command("go", "run", ".")
 	cmd.Dir = "."
-	cmd.Stdout = nil // игнорируем вывод
-	cmd.Stderr = nil // игнорируем вывод
+
+	stdoutPipe, err := cmd.StdoutPipe()
+	if err != nil {
+		t.Fatalf("failed to get stdout pipe: %v", err)
+	}
+	stderrPipe, err := cmd.StderrPipe()
+	if err != nil {
+		t.Fatalf("failed to get stderr pipe: %v", err)
+	}
+
 	if err := cmd.Start(); err != nil {
 		t.Fatalf("failed to start bot process: %v", err)
 	}
 
-	// Завершаем процесс корректно через os.Interrupt, затем Kill если нужно
-	defer func() {
-		if cmd.Process != nil {
-			_ = cmd.Process.Signal(os.Interrupt) // мягкий сигнал
-			done := make(chan error, 1)
-			go func() { done <- cmd.Wait() }()
-			select {
-			case <-time.After(2 * time.Second):
-				_ = cmd.Process.Kill() // принудительно, если не завершился
-			case <-done:
-			}
+	// Чтение stdout/stderr в отдельной горутине
+	go func() {
+		scanner := bufio.NewScanner(stdoutPipe)
+		for scanner.Scan() {
+			t.Logf("[bot stdout] %s", scanner.Text())
 		}
+	}()
+	go func() {
+		scanner := bufio.NewScanner(stderrPipe)
+		for scanner.Scan() {
+			t.Logf("[bot stderr] %s", scanner.Text())
+		}
+	}()
+
+	defer func() {
+		_ = cmd.Process.Signal(os.Interrupt) // сначала сигнал прерывания
+		time.Sleep(100 * time.Millisecond)   // небольшой таймаут, чтобы процесс успел корректно завершиться
+		_ = cmd.Process.Kill()               // потом убиваем принудительно
 	}()
 
 	// 2) Ждем, пока WS поднимется, и подключаемся
 	d := websocket.Dialer{}
 	var ws *websocket.Conn
-	var err error
 	for i := 0; i < 40; i++ { // ~2s
-		ws, _, err = d.Dial("ws://localhost:8765/", nil)
+		wsTmp, _, err := d.Dial("ws://localhost:8765/", nil)
 		if err == nil {
+			ws = wsTmp
 			break
 		}
 		time.Sleep(50 * time.Millisecond)
 	}
-	if err != nil {
+	if ws == nil {
 		t.Fatalf("failed to connect to telemock ws: %v", err)
 	}
 	defer ws.Close()
