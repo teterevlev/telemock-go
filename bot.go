@@ -153,6 +153,13 @@ func (b *Bot) SendMessage(ctx context.Context, params *SendMessageParams) (*Mess
 		return nil, err
 	}
 
+	if b.logFile != nil {
+		b.logMu.Lock()
+		_, _ = b.logFile.Write(data)
+		_, _ = b.logFile.Write([]byte("\n"))
+		b.logMu.Unlock()
+	}
+
 	for _, c := range conns {
 		_ = c.SetWriteDeadline(time.Now().Add(2 * time.Second))
 		if err := c.WriteMessage(websocket.TextMessage, data); err != nil {
