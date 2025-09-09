@@ -34,6 +34,10 @@
     .keyboard-row .keyboard-btn:first-child { border-bottom-left-radius: 6px; }
     .keyboard-row .keyboard-btn:last-child { border-bottom-right-radius: 6px; border-right: 1px solid #ccc; }
     .keyboard-btn:hover { background: #e0e0e0; }
+    .command-link { color: #1976d2; text-decoration: none; cursor: pointer;}
+    .command-link:hover { text-decoration: underline; }
+    .open-in-new { margin-left: 4px; color: #888; text-decoration: none; cursor: pointer; font-size: 0.9em; }
+    .open-in-new:hover { color: #555; }
   </style>
 </head>
 <body>
@@ -65,6 +69,143 @@
 
     function generateMessageId() {
       return messageIdCounter++;
+    }
+
+    function sendTextMessage(text) {
+      if (!activeChatId || !ws || ws.readyState !== WebSocket.OPEN) return;
+      const messageId = generateMessageId();
+      ws.send(JSON.stringify({ chat_id: activeChatId, text: text, message_id: messageId }));
+      addMessage(String(activeChatId), text, "me", null, false, messageId);
+    }
+
+    function openInNewChatAndSend(text) {
+      const id = Math.floor(Math.random() * 1000000);
+      chats[id] = [];
+      switchChat(id);
+      renderChats();
+      sendTextMessage(text);
+    }
+
+    function createCommandNodes(text) {
+      const fragment = document.createDocumentFragment();
+      // Широкое распознавание телеграм-ссылок до первого пробела
+      const linkRegex = /(?:(?:https?:\/\/)?(?:t\.me|telegram\.me)\/\S+)/g;
+      let lastIndex = 0;
+
+      // helper: convert plain text (без ссылок) в узлы с командами
+      const appendWithCommands = (plain) => {
+        const cmdRegex = /(\/[a-zA-Z][\w_]*)/g;
+        let idx = 0;
+        let m;
+        while ((m = cmdRegex.exec(plain)) !== null) {
+          if (m.index > idx) {
+            fragment.appendChild(document.createTextNode(plain.slice(idx, m.index)));
+          }
+          const cmd = m[1];
+          const a = document.createElement('a');
+          a.className = 'command-link';
+          a.textContent = cmd;
+          a.href = '#';
+          a.onclick = (e) => {
+            e.preventDefault();
+            sendTextMessage(cmd);
+          };
+          const open = document.createElement('a');
+          open.className = 'open-in-new';
+          open.textContent = '↗';
+          open.href = '#';
+          open.title = 'Открыть в новом чате';
+          open.onclick = (e) => {
+            e.preventDefault();
+            openInNewChatAndSend(cmd);
+          };
+          fragment.appendChild(a);
+          fragment.appendChild(open);
+          idx = m.index + cmd.length;
+        }
+        if (idx < plain.length) {
+          fragment.appendChild(document.createTextNode(plain.slice(idx)));
+        }
+      };
+
+      let match;
+      while ((match = linkRegex.exec(text)) !== null) {
+        if (match.index > lastIndex) {
+          appendWithCommands(text.slice(lastIndex, match.index));
+        }
+        const full = match[0];
+        // Попробуем извлечь start через стандартный URL-парсер
+        let urlStr = full;
+        if (!/^https?:\/\//i.test(urlStr)) {
+          urlStr = 'https://' + urlStr;
+        }
+        let sendText = null;
+        try {
+          const u = new URL(urlStr);
+          const payloadRaw = u.searchParams.get('start') || '';
+          if (payloadRaw) {
+            try {
+              const decoded = decodeURIComponent(payloadRaw);
+              sendText = `/start ${decoded}`;
+            } catch (_) {
+              sendText = `/start ${payloadRaw}`;
+            }
+          } else {
+            sendText = '/start';
+          }
+        } catch (_) {
+          // если не распарсили, просто не навешиваем действие
+        }
+        // Фолбек: вручную извлечь start, если не получилось через URL
+        if (!sendText || sendText === '/start') {
+          const m = full.match(/[?&]start=([^\s&#]+)/i);
+          if (m && m[1] != null && m[1] !== '') {
+            let raw = m[1].replace(/\+/g, ' ');
+            try {
+              raw = decodeURIComponent(raw);
+            } catch (_) {}
+            sendText = `/start ${raw}`;
+          } else {
+            const idx = full.toLowerCase().indexOf('?start=');
+            if (idx !== -1) {
+              let raw = full.slice(idx + 7);
+              raw = raw.split(/[\s&#]/)[0].replace(/\+/g, ' ');
+              if (raw) {
+                try { raw = decodeURIComponent(raw); } catch (_) {}
+                sendText = `/start ${raw}`;
+              }
+            }
+          }
+        }
+        const a = document.createElement('a');
+        a.className = 'command-link';
+        a.textContent = full;
+        a.href = '#';
+        if (sendText) {
+          a.onclick = (e) => {
+            e.preventDefault();
+            sendTextMessage(sendText);
+          };
+          const open = document.createElement('a');
+          open.className = 'open-in-new';
+          open.textContent = '↗';
+          open.href = '#';
+          open.title = 'Открыть в новом чате';
+          open.onclick = (e) => {
+            e.preventDefault();
+            openInNewChatAndSend(sendText);
+          };
+          fragment.appendChild(a);
+          fragment.appendChild(open);
+        } else {
+          fragment.appendChild(a);
+        }
+        lastIndex = match.index + full.length;
+      }
+      if (lastIndex < text.length) {
+        appendWithCommands(text.slice(lastIndex));
+      }
+      return fragment;
     }
 
     function getSavedServerUrl() {
@@ -168,7 +309,7 @@
           div.appendChild(quoteDiv);
         }
 
-        div.appendChild(document.createTextNode(msg.text));
+        div.appendChild(createCommandNodes(msg.text));
 
         const timeSpan = document.createElement("span");
         timeSpan.className = "time";

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 	"sync/atomic"
 	"time"
 
@@ -105,6 +106,16 @@ func (b *Bot) readLoop(conn *websocket.Conn) {
 				Text:      cp.Text,
 				From:      &User{ID: chatID},
 			}
+			// Если начинается с /команда, добавим Entity типа bot_command до первого пробела
+			if len(cp.Text) > 0 && cp.Text[0] == '/' {
+				end := len(cp.Text)
+				if sp := indexOfSpace(cp.Text); sp != -1 {
+					end = sp
+				}
+				if end > 1 {
+					msg.Entities = append(msg.Entities, MessageEntity{Type: "bot_command", Offset: 0, Length: end})
+				}
+			}
 			upd := Update{
 				UpdateID: atomic.AddInt64(&b.nextUpdID, 1),
 				Message:  msg,
@@ -119,6 +130,11 @@ func (b *Bot) readLoop(conn *websocket.Conn) {
 			continue
 		}
 	}
+}
+
+// indexOfSpace returns index of first space or -1
+func indexOfSpace(s string) int {
+	return strings.IndexByte(s, ' ')
 }
 
 func (b *Bot) drainOneUpdate() error {

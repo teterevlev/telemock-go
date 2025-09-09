@@ -29,10 +29,11 @@ type Update struct {
 }
 
 type Message struct {
-	MessageID int64  `json:"message_id"`
-	From      *User  `json:"from,omitempty"`
-	Chat      Chat   `json:"chat"`
-	Text      string `json:"text"`
+	MessageID int64           `json:"message_id"`
+	From      *User           `json:"from,omitempty"`
+	Chat      Chat            `json:"chat"`
+	Text      string          `json:"text"`
+	Entities  []MessageEntity `json:"entities,omitempty"`
 }
 
 type Chat struct {
@@ -42,6 +43,12 @@ type Chat struct {
 type User struct {
 	ID   int64  `json:"id"`
 	Name string `json:"name,omitempty"`
+}
+
+type MessageEntity struct {
+	Type   string `json:"type"`
+	Offset int    `json:"offset"`
+	Length int    `json:"length"`
 }
 
 type CallbackQuery struct {
